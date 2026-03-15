@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Regen-Monitor (index2)</title>
+    <title>Regen-Monitor</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --color-rain: #00bcd4; }
         body { font-family: 'Segoe UI', sans-serif; background: #121212; color: white; text-align: center; margin: 0; padding: 10px; }
-        .container { max-width: 800px; margin: auto; }
+        .container { max-width: 950px; margin: auto; }
         .card { background: #1e1e1e; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); margin-bottom: 20px; }
         .val { font-size: 3.5em; font-weight: bold; color: var(--color-rain); }
-        .chart-container { background: #1e1e1e; padding: 15px; border-radius: 12px; height: 400px; }
-        select { background: #333; color: white; border: 1px solid #555; padding: 10px; border-radius: 5px; cursor: pointer; }
-        .controls { margin-top: 20px; display: flex; justify-content: center; gap: 10px; align-items: center; }
+        .chart-container { background: #1e1e1e; padding: 15px; border-radius: 12px; height: 450px; }
+        select { background: #333; color: white; border: 1px solid #555; padding: 8px; border-radius: 5px; cursor: pointer; }
+        .controls { margin-top: 20px; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; align-items: center; background: #1e1e1e; padding: 15px; border-radius: 12px; }
     </style>
 </head>
 <body>
@@ -22,7 +22,7 @@
     <h1>Niederschlags-Monitor</h1>
     
     <div class="card">
-        <h3>Aktueller Niederschlag</h3>
+        <h3 id="displayTitle">Daten werden geladen...</h3>
         <div id="currRain" class="val">--</div>
         <div style="color: #888;">Liter / m²</div>
     </div>
@@ -32,115 +32,121 @@
     </div>
 
     <div class="controls">
-        <span>Datenpunkte:</span>
-        <select id="limitSelect" onchange="updateData()">
-            <option value="50">50</option>
-            <option value="100" selected>100</option>
-            <option value="500">500</option>
-            <option value="1000">1000</option>
-            <option value="2000">2000</option>
-        </select>
+        <div>Jahr: 
+            <select id="yearSelect" onchange="updateData()">
+                <option value="2026" selected>2026</option>
+                <option value="2025">2025</option>
+            </select>
+        </div>
+        <div>Monat: 
+            <select id="monthSelect" onchange="updateData()">
+                <option value="Januar">Januar</option>
+                <option value="Februar">Februar</option>
+                <option value="Maerz" selected>März</option>
+                <option value="April">April</option>
+                <option value="Mai">Mai</option>
+                <option value="Juni">Juni</option>
+                <option value="Juli">Juli</option>
+                <option value="August">August</option>
+                <option value="September">September</option>
+                <option value="Oktober">Oktober</option>
+                <option value="November">November</option>
+                <option value="Dezember">Dezember</option>
+            </select>
+        </div>
+        <div>Datenpunkte: 
+            <select id="limitSelect" onchange="updateData()">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="500">500</option>
+                <option value="1000">1000</option>
+                <option value="2000">2000</option>
+                <option value="5000">5000</option>
+            </select>
+        </div>
     </div>
 </div>
 
 <script>
-    // Korrekter Pfad basierend auf deinem Screenshot
-    const dbUrl = "https://wetterdaten-98f0f-default-rtdb.europe-west1.firebasedatabase.app/Regenmesser.json";
+    const baseUrl = "https://wetterdaten-98f0f-default-rtdb.europe-west1.firebasedatabase.app/Regenmesser";
     const ctx = document.getElementById('rainChart').getContext('2d');
-    const colorRain = '#00bcd4';
 
     const chart = new Chart(ctx, {
         type: 'line',
-        data: { 
-             labels: [], 
-             datasets: [{ 
-                 label: 'Niederschlag (l/m²)', 
-                 borderColor: colorRain, 
-                 backgroundColor: 'rgba(0, 188, 212, 0.2)',
-                 data: [], 
-                 tension: 0.3, 
-                 fill: true,
-                 pointRadius: 2 
-             }]
-        },
+        data: { labels: [], datasets: [{ 
+            label: 'l/m²', 
+            borderColor: '#00bcd4', 
+            backgroundColor: 'rgba(0, 188, 212, 0.1)',
+            data: [], 
+            tension: 0.1, 
+            fill: true,
+            pointRadius: (context) => context.chart.data.datasets[0].data.length > 500 ? 0 : 3
+        }]},
         options: {
-            responsive: true, 
-            maintainAspectRatio: false, 
-            animation: { duration: 0 },
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
             scales: {
-                y: { 
-                    beginAtZero: true, 
-                    // Autoscale ist hier aktiv (kein festes Max)
-                    ticks: { 
-                        color: colorRain,
-                        callback: function(value) { return value.toFixed(1) + ' l'; }
-                    },
-                    title: { display: true, text: 'Liter / m²', color: colorRain },
-                    grid: { color: '#333' } 
-                },
-                x: { 
-                    ticks: { color: '#888', maxTicksLimit: 10 } 
-                }
+                y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#00bcd4' } },
+                x: { grid: { display: false }, ticks: { color: '#888', maxTicksLimit: 10 } }
             },
             plugins: { 
                 legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: (c) => ` ${c.raw.toFixed(2)} l/m²`
-                    }
-                }
+                tooltip: { mode: 'index', intersect: false }
             }
         }
     });
 
     async function updateData() {
+        const year = document.getElementById('yearSelect').value;
+        const month = document.getElementById('monthSelect').value;
         const lim = document.getElementById('limitSelect').value;
+        
+        document.getElementById('displayTitle').innerText = `Niederschlag ${month} ${year}`;
 
         try {
-            // Abfrage der Daten aus dem Knoten "Regenmesser"
-            const r = await fetch(`${dbUrl}?orderBy="$key"&limitToLast=${lim}`);
-            const data = await r.json();
+            const response = await fetch(`${baseUrl}/${year}/${month}.json?orderBy="$key"&limitToLast=${lim}`);
+            const data = await response.json();
             
-            if (!data) {
-                console.log("Keine Daten gefunden");
+            if (!data || Object.keys(data).length === 0) {
+                clearChart();
                 return;
             }
 
             const keys = Object.keys(data).sort();
-            const labels = [], rainData = [];
-            let lastValue = 0;
+            const labels = [];
+            const values = [];
 
             keys.forEach(k => {
-                const e = data[k];
-                
-                // 1. Zeitstempel: Wenn ts eine Zahl ist, nutzen wir sie, sonst den Key
-                labels.push(e.ts ? "Punkt " + e.ts : k.slice(-5));
-                
-                // 2. Messwert: Extrahiere gezielt "regen" wie im Screenshot zu sehen
-                const val = parseFloat(e.regen) || 0;
-                
-                rainData.push(val);
-                lastValue = val;
+                const entry = data[k];
+                let ts = entry.zeitstempel || "";
+                let timeOnly = ts.includes(" ") ? ts.split(" ")[1] : ts;
+                labels.push(timeOnly);
+
+                let val = parseFloat(entry.regen_l_m2) || 0;
+                values.push(val);
             });
 
-            // Update Anzeige
-            document.getElementById('currRain').innerText = lastValue.toFixed(2);
+            document.getElementById('currRain').innerText = (values[values.length - 1] || 0).toFixed(2);
             
-            // Update Chart
             chart.data.labels = labels;
-            chart.data.datasets[0].data = rainData;
-            chart.update('none'); 
-        } catch (e) { 
-            console.error("Fehler beim Abrufen:", e); 
+            chart.data.datasets[0].data = values;
+            chart.update();
+
+        } catch (e) {
+            console.error("Fehler:", e);
         }
     }
 
-    function init() {
-        updateData();
-        setInterval(updateData, 10000); // Alle 10 Sekunden prüfen
+    function clearChart() {
+        document.getElementById('currRain').innerText = "0.00";
+        chart.data.labels = [];
+        chart.data.datasets[0].data = [];
+        chart.update();
     }
-    
-    init();
+
+    updateData();
+    setInterval(updateData, 30000);
 </script>
 </body>
 </html>
