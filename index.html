@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Regen-Monitor Pro (Gefiltert)</title>
+    <title>Regen-Monitor Klaus Stabil Pro</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { 
@@ -15,9 +15,9 @@
         .card { background: #1e1e1e; padding: 25px; border-radius: 12px; margin-bottom: 20px; border-bottom: 5px solid var(--color-0); transition: border-color 0.8s; }
         .val { font-size: 3.5em; font-weight: bold; color: var(--color-0); transition: color 0.8s; }
         .chart-container { background: #1e1e1e; padding: 15px; border-radius: 12px; height: 450px; }
-        .quick-select { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
-        .btn-quick { background: #333; color: white; border: 1px solid #555; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
-        .btn-quick.active { background: #00bcd4; color: #121212; font-weight: bold; }
+        .quick-select { display: flex; justify-content: center; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
+        .btn-quick { background: #333; color: white; border: 1px solid #555; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9em; }
+        .btn-quick.active { background: #00bcd4; color: #121212; font-weight: bold; border-color: #00bcd4; }
         .controls { margin-top: 20px; display: flex; justify-content: center; gap: 15px; background: #1e1e1e; padding: 15px; border-radius: 12px; }
         select { background: #333; color: white; border: 1px solid #555; padding: 8px; border-radius: 5px; }
     </style>
@@ -25,14 +25,13 @@
 <body>
 
 <div class="container">
-    <h1>Regen-Monitor</h1>
     <div class="card" id="mainCard">
         <h3 id="displayTitle">Daten werden geladen...</h3>
         <div id="currRain" class="val">--</div>
-        <div style="color: #888;">l/m² Gesamt | <span id="rateVal">0.0</span> l/h Intensität (Glättung an)</div>
     </div>
 
     <div class="quick-select">
+        <button class="btn-quick" id="btn4h" onclick="setTimeframe('4h')">4 Std</button>
         <button class="btn-quick active" id="btnToday" onclick="setTimeframe('today')">Heute</button>
         <button class="btn-quick" id="btnWeek" onclick="setTimeframe('week')">7 Tage</button>
         <button class="btn-quick" id="btnMonth" onclick="setTimeframe('month')">Monat</button>
@@ -59,14 +58,14 @@
     const baseUrl = "https://wetterdaten-98f0f-default-rtdb.europe-west1.firebasedatabase.app/Regenmesser";
     const ctx = document.getElementById('rainChart').getContext('2d');
     let currentTimeframe = 'today';
-    let rawDiffs = []; // Speichert die letzten Differenzen für die Glättung
 
-    function getColor(rate) {
-        if (rate > 30.0) return '#9c27b0'; // Violett
-        if (rate > 10.0) return '#f44336'; // Rot
-        if (rate > 2.5)  return '#ff9800'; // Orange
-        if (rate > 0.8)  return '#ffeb3b'; // Gelb (Filter etwas höher angesetzt)
-        return '#00bcd4'; // Türkis
+    // Feinere Farblogik innerhalb des Starkregen-Bereichs (> 0,4l/min)
+    function getColorByDiff(diff) {
+        if (diff < 0.40) return '#00bcd4'; // Türkis
+        if (diff < 0.45) return '#ffeb3b'; // Gelb
+        if (diff < 0.55) return '#ff9800'; // Orange
+        if (diff < 0.70) return '#f44336'; // Rot
+        return '#9c27b0';                 // Violett
     }
 
     const chart = new Chart(ctx, {
@@ -74,15 +73,14 @@
         data: { labels: [], datasets: [{ 
             label: 'l/m²', 
             data: [], 
-            tension: 0.2, // Leichte Kurve zur optischen Beruhigung
+            tension: 0.1, 
             pointRadius: 0,
             borderWidth: 3,
             segment: {
                 borderColor: ctx => {
                     if (ctx.p0.parsed && ctx.p1.parsed) {
-                        const diff = (ctx.p1.parsed.y - ctx.p0.parsed.y) * 60;
-                        // Starker Rauschfilter für die Historie:
-                        return diff > 0.8 ? getColor(diff) : '#00bcd4';
+                        const diff = ctx.p1.parsed.y - ctx.p0.parsed.y;
+                        return getColorByDiff(diff);
                     }
                     return '#00bcd4';
                 }
@@ -102,9 +100,22 @@
         const year = document.getElementById('yearSelect').value;
         const month = document.getElementById('monthSelect').value;
         const now = new Date();
-        let filterDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()); 
-        if (currentTimeframe === 'week') filterDate.setDate(now.getDate() - 7);
-        if (currentTimeframe === 'month') filterDate.setDate(now.getDate() - 31);
+        let filterDate;
+        let titleText = "";
+
+        if (currentTimeframe === '4h') {
+            filterDate = new Date(now.getTime() - (4 * 60 * 60 * 1000));
+            titleText = "Niederschlag: Letzte 4 Stunden";
+        } else if (currentTimeframe === 'week') {
+            filterDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+            titleText = "Niederschlag: Letzte 7 Tage";
+        } else if (currentTimeframe === 'month') {
+            filterDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 31);
+            titleText = `Niederschlag: Monat ${month}`;
+        } else {
+            filterDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            titleText = "Niederschlag: Heute";
+        }
 
         try {
             const response = await fetch(`${baseUrl}/${year}/${month}.json?orderBy="$key"&limitToLast=10000`);
@@ -115,7 +126,7 @@
             const values = [];
             const keys = Object.keys(data).sort();
             let lastVal = -1;
-            let currentDiffs = [];
+            let lastDiff = 0;
 
             keys.forEach(k => {
                 const entry = data[k];
@@ -123,43 +134,34 @@
                 const entryDate = new Date(parts[2], parts[1]-1, parts[0], parts[3], parts[4]);
 
                 if (entryDate >= filterDate) {
-                    let hour = (parseInt(parts[3]) + 1) % 24; 
-                    labels.push(`${hour.toString().padStart(2, '0')}:${parts[4]}`);
+                    let h = (parseInt(parts[3]) + 1) % 24; 
+                    labels.push(`${h.toString().padStart(2, '0')}:${parts[4]}`);
                     const val = parseFloat(entry.regen_l_m2) || 0;
                     values.push(val);
-                    
-                    if (lastVal !== -1) {
-                        currentDiffs.push(val - lastVal);
-                    }
+                    if (lastVal !== -1) lastDiff = val - lastVal;
                     lastVal = val;
                 }
             });
 
-            // Glättung: Durchschnitt der letzten 5 Messpunkte für die Anzeige
-            const lastFive = currentDiffs.slice(-5);
-            const avgDiff = lastFive.length > 0 ? (lastFive.reduce((a, b) => a + b, 0) / lastFive.length) : 0;
-            const smoothedRate = Math.max(0, avgDiff * 60);
+            const totalVal = values[values.length - 1] || 0;
+            document.getElementById('currRain').innerText = totalVal.toFixed(2) + " Liter/m²";
             
-            const finalVal = values[values.length - 1] || 0;
-            document.getElementById('currRain').innerText = finalVal.toFixed(2);
-            document.getElementById('rateVal').innerText = smoothedRate.toFixed(1);
-            
-            // Farbe für UI basierend auf geglättetem Wert
-            const activeColor = getColor(smoothedRate);
+            const activeColor = getColorByDiff(lastDiff);
             document.getElementById('currRain').style.color = activeColor;
             document.getElementById('mainCard').style.borderColor = activeColor;
 
             chart.data.labels = labels;
             chart.data.datasets[0].data = values;
             chart.update();
-            document.getElementById('displayTitle').innerText = `Niederschlag ${currentTimeframe === 'today' ? 'Heute' : month}`;
+            document.getElementById('displayTitle').innerText = titleText;
         } catch (e) { console.error(e); }
     }
 
     function setTimeframe(tf) {
         currentTimeframe = tf;
         document.querySelectorAll('.btn-quick').forEach(b => b.classList.remove('active'));
-        document.getElementById('btn' + tf.charAt(0).toUpperCase() + tf.slice(1)).classList.add('active');
+        let btnId = "btn" + (tf === '4h' ? '4h' : tf.charAt(0).toUpperCase() + tf.slice(1));
+        document.getElementById(btnId).classList.add('active');
         updateData();
     }
 
