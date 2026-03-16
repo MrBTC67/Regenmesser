@@ -35,7 +35,6 @@
         <div>Jahr: 
             <select id="yearSelect" onchange="updateData()">
                 <option value="2026" selected>2026</option>
-                <option value="2025">2025</option>
             </select>
         </div>
         <div>Monat: 
@@ -122,14 +121,12 @@
                 let ts = entry.zeitstempel || "";
                 let timeOnly = ts.includes(" ") ? ts.split(" ")[1] : ts;
 
-                // --- ZEITKORREKTUR +1 STUNDE ---
                 if (timeOnly.includes(":")) {
                     let parts = timeOnly.split(":");
                     let hour = (parseInt(parts[0]) + 1) % 24; 
                     parts[0] = hour.toString().padStart(2, '0');
                     timeOnly = parts.join(":");
                 }
-                // -------------------------------
 
                 labels.push(timeOnly);
                 let val = parseFloat(entry.regen_l_m2) || 0;
