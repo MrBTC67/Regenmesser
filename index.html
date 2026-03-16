@@ -80,7 +80,7 @@
             data: [], 
             tension: 0.1, 
             fill: true,
-            pointRadius: 0 // Datenpunkte ausgeblendet für eine klare Linie
+            pointRadius: 0 
         }]},
         options: {
             responsive: true,
@@ -121,8 +121,17 @@
                 const entry = data[k];
                 let ts = entry.zeitstempel || "";
                 let timeOnly = ts.includes(" ") ? ts.split(" ")[1] : ts;
-                labels.push(timeOnly);
 
+                // --- ZEITKORREKTUR +1 STUNDE ---
+                if (timeOnly.includes(":")) {
+                    let parts = timeOnly.split(":");
+                    let hour = (parseInt(parts[0]) + 1) % 24; 
+                    parts[0] = hour.toString().padStart(2, '0');
+                    timeOnly = parts.join(":");
+                }
+                // -------------------------------
+
+                labels.push(timeOnly);
                 let val = parseFloat(entry.regen_l_m2) || 0;
                 values.push(val);
             });
