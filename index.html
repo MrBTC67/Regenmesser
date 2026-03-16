@@ -3,28 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Regen-Monitor</title>
+    <title>Regen-Monitor Pro (Gefiltert)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --color-rain: #00bcd4; }
+        :root { 
+            --color-0: #00bcd4; --color-1: #ffeb3b; --color-2: #ff9800; 
+            --color-3: #f44336; --color-4: #9c27b0; 
+        }
         body { font-family: 'Segoe UI', sans-serif; background: #121212; color: white; text-align: center; margin: 0; padding: 10px; }
         .container { max-width: 950px; margin: auto; }
-        .card { background: #1e1e1e; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); margin-bottom: 20px; }
-        .val { font-size: 3.5em; font-weight: bold; color: var(--color-rain); }
+        .card { background: #1e1e1e; padding: 25px; border-radius: 12px; margin-bottom: 20px; border-bottom: 5px solid var(--color-0); transition: border-color 0.8s; }
+        .val { font-size: 3.5em; font-weight: bold; color: var(--color-0); transition: color 0.8s; }
         .chart-container { background: #1e1e1e; padding: 15px; border-radius: 12px; height: 450px; }
-        select { background: #333; color: white; border: 1px solid #555; padding: 8px; border-radius: 5px; cursor: pointer; }
-        .controls { margin-top: 20px; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; align-items: center; background: #1e1e1e; padding: 15px; border-radius: 12px; }
+        .quick-select { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
+        .btn-quick { background: #333; color: white; border: 1px solid #555; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+        .btn-quick.active { background: #00bcd4; color: #121212; font-weight: bold; }
+        .controls { margin-top: 20px; display: flex; justify-content: center; gap: 15px; background: #1e1e1e; padding: 15px; border-radius: 12px; }
+        select { background: #333; color: white; border: 1px solid #555; padding: 8px; border-radius: 5px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Niederschlags-Monitor</h1>
-    
-    <div class="card">
+    <h1>Regen-Monitor</h1>
+    <div class="card" id="mainCard">
         <h3 id="displayTitle">Daten werden geladen...</h3>
         <div id="currRain" class="val">--</div>
-        <div style="color: #888;">Liter / m²</div>
+        <div style="color: #888;">l/m² Gesamt | <span id="rateVal">0.0</span> l/h Intensität (Glättung an)</div>
+    </div>
+
+    <div class="quick-select">
+        <button class="btn-quick active" id="btnToday" onclick="setTimeframe('today')">Heute</button>
+        <button class="btn-quick" id="btnWeek" onclick="setTimeframe('week')">7 Tage</button>
+        <button class="btn-quick" id="btnMonth" onclick="setTimeframe('month')">Monat</button>
     </div>
 
     <div class="chart-container">
@@ -32,123 +43,124 @@
     </div>
 
     <div class="controls">
-        <div>Jahr: 
-            <select id="yearSelect" onchange="updateData()">
-                <option value="2026" selected>2026</option>
-            </select>
-        </div>
-        <div>Monat: 
-            <select id="monthSelect" onchange="updateData()">
-                <option value="Januar">Januar</option>
-                <option value="Februar">Februar</option>
-                <option value="Maerz" selected>März</option>
-                <option value="April">April</option>
-                <option value="Mai">Mai</option>
-                <option value="Juni">Juni</option>
-                <option value="Juli">Juli</option>
-                <option value="August">August</option>
-                <option value="September">September</option>
-                <option value="Oktober">Oktober</option>
-                <option value="November">November</option>
-                <option value="Dezember">Dezember</option>
-            </select>
-        </div>
-        <div>Datenpunkte: 
-            <select id="limitSelect" onchange="updateData()">
-                <option value="50">50</option>
-                <option value="100" selected>100</option>
-                <option value="500">500</option>
-                <option value="1000">1000</option>
-                <option value="2000">2000</option>
-                <option value="5000">5000</option>
-            </select>
-        </div>
+        <select id="yearSelect" onchange="updateData()"><option value="2026">2026</option></select>
+        <select id="monthSelect" onchange="updateData()">
+            <option value="Januar">Januar</option><option value="Februar">Februar</option>
+            <option value="Maerz" selected>März</option><option value="April">April</option>
+            <option value="Mai">Mai</option><option value="Juni">Juni</option>
+            <option value="Juli">Juli</option><option value="August">August</option>
+            <option value="September">September</option><option value="Oktober">Oktober</option>
+            <option value="November">November</option><option value="Dezember">Dezember</option>
+        </select>
     </div>
 </div>
 
 <script>
     const baseUrl = "https://wetterdaten-98f0f-default-rtdb.europe-west1.firebasedatabase.app/Regenmesser";
     const ctx = document.getElementById('rainChart').getContext('2d');
+    let currentTimeframe = 'today';
+    let rawDiffs = []; // Speichert die letzten Differenzen für die Glättung
+
+    function getColor(rate) {
+        if (rate > 30.0) return '#9c27b0'; // Violett
+        if (rate > 10.0) return '#f44336'; // Rot
+        if (rate > 2.5)  return '#ff9800'; // Orange
+        if (rate > 0.8)  return '#ffeb3b'; // Gelb (Filter etwas höher angesetzt)
+        return '#00bcd4'; // Türkis
+    }
 
     const chart = new Chart(ctx, {
         type: 'line',
         data: { labels: [], datasets: [{ 
             label: 'l/m²', 
-            borderColor: '#00bcd4', 
-            backgroundColor: 'rgba(0, 188, 212, 0.1)',
             data: [], 
-            tension: 0.1, 
-            fill: true,
-            pointRadius: 0 
+            tension: 0.2, // Leichte Kurve zur optischen Beruhigung
+            pointRadius: 0,
+            borderWidth: 3,
+            segment: {
+                borderColor: ctx => {
+                    if (ctx.p0.parsed && ctx.p1.parsed) {
+                        const diff = (ctx.p1.parsed.y - ctx.p0.parsed.y) * 60;
+                        // Starker Rauschfilter für die Historie:
+                        return diff > 0.8 ? getColor(diff) : '#00bcd4';
+                    }
+                    return '#00bcd4';
+                }
+            }
         }]},
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: false,
-            scales: {
-                y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#00bcd4' } },
+        options: { 
+            responsive: true, maintainAspectRatio: false, animation: false,
+            scales: { 
+                y: { beginAtZero: false, grid: { color: '#333' }, ticks: { color: '#888' } },
                 x: { grid: { display: false }, ticks: { color: '#888', maxTicksLimit: 10 } }
             },
-            plugins: { 
-                legend: { display: false },
-                tooltip: { mode: 'index', intersect: false }
-            }
+            plugins: { legend: { display: false } }
         }
     });
 
     async function updateData() {
         const year = document.getElementById('yearSelect').value;
         const month = document.getElementById('monthSelect').value;
-        const lim = document.getElementById('limitSelect').value;
-        
-        document.getElementById('displayTitle').innerText = `Niederschlag ${month} ${year}`;
+        const now = new Date();
+        let filterDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()); 
+        if (currentTimeframe === 'week') filterDate.setDate(now.getDate() - 7);
+        if (currentTimeframe === 'month') filterDate.setDate(now.getDate() - 31);
 
         try {
-            const response = await fetch(`${baseUrl}/${year}/${month}.json?orderBy="$key"&limitToLast=${lim}`);
+            const response = await fetch(`${baseUrl}/${year}/${month}.json?orderBy="$key"&limitToLast=10000`);
             const data = await response.json();
-            
-            if (!data || Object.keys(data).length === 0) {
-                clearChart();
-                return;
-            }
+            if (!data) return;
 
-            const keys = Object.keys(data).sort();
             const labels = [];
             const values = [];
+            const keys = Object.keys(data).sort();
+            let lastVal = -1;
+            let currentDiffs = [];
 
             keys.forEach(k => {
                 const entry = data[k];
-                let ts = entry.zeitstempel || "";
-                let timeOnly = ts.includes(" ") ? ts.split(" ")[1] : ts;
+                const parts = entry.zeitstempel.split(/[. :]/);
+                const entryDate = new Date(parts[2], parts[1]-1, parts[0], parts[3], parts[4]);
 
-                if (timeOnly.includes(":")) {
-                    let parts = timeOnly.split(":");
-                    let hour = (parseInt(parts[0]) + 1) % 24; 
-                    parts[0] = hour.toString().padStart(2, '0');
-                    timeOnly = parts.join(":");
+                if (entryDate >= filterDate) {
+                    let hour = (parseInt(parts[3]) + 1) % 24; 
+                    labels.push(`${hour.toString().padStart(2, '0')}:${parts[4]}`);
+                    const val = parseFloat(entry.regen_l_m2) || 0;
+                    values.push(val);
+                    
+                    if (lastVal !== -1) {
+                        currentDiffs.push(val - lastVal);
+                    }
+                    lastVal = val;
                 }
-
-                labels.push(timeOnly);
-                let val = parseFloat(entry.regen_l_m2) || 0;
-                values.push(val);
             });
 
-            document.getElementById('currRain').innerText = (values[values.length - 1] || 0).toFixed(2);
+            // Glättung: Durchschnitt der letzten 5 Messpunkte für die Anzeige
+            const lastFive = currentDiffs.slice(-5);
+            const avgDiff = lastFive.length > 0 ? (lastFive.reduce((a, b) => a + b, 0) / lastFive.length) : 0;
+            const smoothedRate = Math.max(0, avgDiff * 60);
             
+            const finalVal = values[values.length - 1] || 0;
+            document.getElementById('currRain').innerText = finalVal.toFixed(2);
+            document.getElementById('rateVal').innerText = smoothedRate.toFixed(1);
+            
+            // Farbe für UI basierend auf geglättetem Wert
+            const activeColor = getColor(smoothedRate);
+            document.getElementById('currRain').style.color = activeColor;
+            document.getElementById('mainCard').style.borderColor = activeColor;
+
             chart.data.labels = labels;
             chart.data.datasets[0].data = values;
             chart.update();
-
-        } catch (e) {
-            console.error("Fehler:", e);
-        }
+            document.getElementById('displayTitle').innerText = `Niederschlag ${currentTimeframe === 'today' ? 'Heute' : month}`;
+        } catch (e) { console.error(e); }
     }
 
-    function clearChart() {
-        document.getElementById('currRain').innerText = "0.00";
-        chart.data.labels = [];
-        chart.data.datasets[0].data = [];
-        chart.update();
+    function setTimeframe(tf) {
+        currentTimeframe = tf;
+        document.querySelectorAll('.btn-quick').forEach(b => b.classList.remove('active'));
+        document.getElementById('btn' + tf.charAt(0).toUpperCase() + tf.slice(1)).classList.add('active');
+        updateData();
     }
 
     updateData();
