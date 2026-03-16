@@ -80,7 +80,7 @@
             data: [], 
             tension: 0.1, 
             fill: true,
-            pointRadius: (context) => context.chart.data.datasets[0].data.length > 500 ? 0 : 3
+            pointRadius: 0 // Datenpunkte ausgeblendet für eine klare Linie
         }]},
         options: {
             responsive: true,
