@@ -3,36 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Regen-Monitor Klaus Stabil</title>
+    <title>Regen-Monitor Klaus Mobil</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { 
             --color-dry: #00bcd4; --color-light: #ffeb3b; --color-mod: #ff9800; 
             --color-heavy: #f44336; --color-extreme: #9c27b0; 
         }
-        body { font-family: 'Segoe UI', sans-serif; background: #121212; color: white; text-align: center; margin: 0; padding: 10px; }
-        .container { max-width: 950px; margin: auto; }
-        .card { background: #1e1e1e; padding: 25px; border-radius: 12px; margin-bottom: 20px; border-bottom: 5px solid var(--color-dry); transition: border-color 0.8s; }
-        .val { font-size: 3.5em; font-weight: bold; color: var(--color-dry); transition: color 0.8s; }
-        .chart-container { background: #1e1e1e; padding: 15px; border-radius: 12px; height: 400px; }
+        body { font-family: 'Segoe UI', sans-serif; background: #121212; color: white; text-align: center; margin: 0; padding: 0; overflow-x: hidden; }
         
-        /* Legende Styles */
-        .legend { display: flex; justify-content: center; gap: 15px; margin-top: 15px; flex-wrap: wrap; font-size: 0.85em; color: #aaa; }
-        .legend-item { display: flex; align-items: center; gap: 5px; }
-        .dot { width: 12px; height: 12px; border-radius: 50%; }
+        /* Container auf 95% Breite für schmale Handy-Optik */
+        .container { width: 95%; max-width: 500px; margin: 10px auto; }
+        
+        .card { 
+            background: #1e1e1e; padding: 15px 5px; border-radius: 12px; margin-bottom: 10px; 
+            border-bottom: 5px solid var(--color-dry); 
+            transition: border-color 1s ease;
+        }
+        .val { 
+            font-size: 2.2em; font-weight: bold; color: var(--color-dry); 
+            transition: color 1s ease;
+            white-space: nowrap;
+        }
 
-        .quick-select { display: flex; justify-content: center; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; margin-top: 10px;}
-        .btn-quick { background: #333; color: white; border: 1px solid #555; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9em; }
+        /* Chart-Höhe festgesetzt, damit er nicht den Bildschirm sprengt */
+        .chart-container { background: #1e1e1e; padding: 5px; border-radius: 12px; height: 300px; position: relative; width: 100%; }
+
+        .quick-select { display: flex; justify-content: center; gap: 5px; margin-bottom: 10px; flex-wrap: wrap; }
+        .btn-quick { background: #333; color: white; border: 1px solid #555; padding: 8px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8em; flex: 1; min-width: 60px; }
         .btn-quick.active { background: #00bcd4; color: #121212; font-weight: bold; border-color: #00bcd4; }
-        .controls { margin-top: 20px; display: flex; justify-content: center; gap: 15px; background: #1e1e1e; padding: 15px; border-radius: 12px; }
-        select { background: #333; color: white; border: 1px solid #555; padding: 8px; border-radius: 5px; }
+        
+        .controls { margin-top: 10px; display: flex; justify-content: center; gap: 8px; background: #1e1e1e; padding: 10px; border-radius: 12px; }
+        select { background: #333; color: white; border: 1px solid #555; padding: 6px; border-radius: 5px; font-size: 0.85em; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="card" id="mainCard">
-        <h3 id="displayTitle">Daten werden geladen...</h3>
+        <h3 id="displayTitle" style="font-size: 1em; margin: 0 0 5px 0;">Daten laden...</h3>
         <div id="currRain" class="val">--</div>
     </div>
 
@@ -45,13 +54,6 @@
 
     <div class="chart-container">
         <canvas id="rainChart"></canvas>
-        <div class="legend">
-            <div class="legend-item"><div class="dot" style="background: var(--color-dry);"></div> < 0,2 l (Rauschen)</div>
-            <div class="legend-item"><div class="dot" style="background: var(--color-light);"></div> Mäßig</div>
-            <div class="legend-item"><div class="dot" style="background: var(--color-mod);"></div> Stark</div>
-            <div class="legend-item"><div class="dot" style="background: var(--color-heavy);"></div> Sehr Stark</div>
-            <div class="legend-item"><div class="dot" style="background: var(--color-extreme);"></div> Extrem</div>
-        </div>
     </div>
 
     <div class="controls">
@@ -73,12 +75,12 @@
     let currentTimeframe = 'today';
 
     function getColorByDiff(diff) {
-        if (diff < 0.2) return '#00bcd4'; // Türkis (Rauschfilter)
+        if (diff < 0.2) return '#00bcd4'; 
         const rate = diff * 60; 
-        if (rate <= 15.0) return '#ffeb3b'; // Gelb
-        if (rate <= 30.0) return '#ff9800'; // Orange
-        if (rate <= 45.0) return '#f44336'; // Rot
-        return '#9c27b0';                  // Violett
+        if (rate <= 15.0) return '#ffeb3b'; 
+        if (rate <= 30.0) return '#ff9800'; 
+        if (rate <= 45.0) return '#f44336'; 
+        return '#9c27b0';                  
     }
 
     const chart = new Chart(ctx, {
@@ -88,7 +90,7 @@
             data: [], 
             tension: 0, 
             pointRadius: 0,
-            borderWidth: 3,
+            borderWidth: 2,
             segment: {
                 borderColor: ctx => {
                     if (ctx.p0.parsed && ctx.p1.parsed) {
@@ -102,8 +104,8 @@
         options: { 
             responsive: true, maintainAspectRatio: false, animation: false,
             scales: { 
-                y: { beginAtZero: false, grid: { color: '#333' }, ticks: { color: '#888' } },
-                x: { grid: { display: false }, ticks: { color: '#888', maxTicksLimit: 10 } }
+                y: { beginAtZero: false, grid: { color: '#333' }, ticks: { color: '#888', font: { size: 9 } } },
+                x: { grid: { display: false }, ticks: { color: '#888', font: { size: 9 }, maxTicksLimit: 5 } }
             },
             plugins: { legend: { display: false } }
         }
@@ -118,13 +120,13 @@
 
         if (currentTimeframe === '4h') {
             filterDate = new Date(now.getTime() - (4 * 60 * 60 * 1000));
-            titleText = "Niederschlag: Letzte 4 Stunden";
+            titleText = "Niederschlag: Letzte 4h";
         } else if (currentTimeframe === 'week') {
             filterDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
             titleText = "Niederschlag: Letzte 7 Tage";
         } else if (currentTimeframe === 'month') {
             filterDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 31);
-            titleText = `Niederschlag: Monat ${month}`;
+            titleText = `Niederschlag: ${month}`;
         } else {
             filterDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             titleText = "Niederschlag: Heute";
@@ -160,7 +162,7 @@
             });
 
             const totalVal = values[values.length - 1] || 0;
-            document.getElementById('currRain').innerText = totalVal.toFixed(2) + " Liter/m²";
+            document.getElementById('currRain').innerText = totalVal.toFixed(2) + " l/m²";
             
             const activeColor = getColorByDiff(lastDiff);
             document.getElementById('currRain').style.color = activeColor;
